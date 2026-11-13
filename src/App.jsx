@@ -1,19 +1,14 @@
+
 import Student from "./Student";
 import { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
-  
   const [qrCode, setQrCode] = useState("");
   const [expiresAt, setExpiresAt] = useState(null);
   const [remaining, setRemaining] = useState(300);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Ready to start attendance");
-
-  // Add this check immediately after the opening brace
-  if (window.location.pathname === "/student") {
-    return <Student />;
-  }
 
   // Five-minute countdown
   useEffect(() => {
@@ -37,9 +32,16 @@ function App() {
     updateTimer();
 
     const timer = setInterval(updateTimer, 1000);
-
     return () => clearInterval(timer);
   }, [expiresAt]);
+
+  // Student page routing
+  if (
+    window.location.pathname === "/student" ||
+    new URLSearchParams(window.location.search).get("student") === "1"
+  ) {
+    return <Student />;
+  }
 
   // Get teacher location and generate QR
   const startAttendance = () => {
@@ -64,10 +66,7 @@ function App() {
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                teacherLat,
-                teacherLon,
-              }),
+              body: JSON.stringify({ teacherLat, teacherLon }),
             }
           );
 
@@ -105,9 +104,6 @@ function App() {
   };
 
   const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
-  if (new URLSearchParams(window.location.search).get("student") === "1") {
-  return <Student />;
-}
   const seconds = String(remaining % 60).padStart(2, "0");
 
   return (
@@ -131,13 +127,8 @@ function App() {
         {qrCode && (
           <div className="qr-section">
             <h3>Scan to Mark Attendance</h3>
-
             <img src={qrCode} alt="Attendance QR Code" />
-
-            <h2 className="timer">
-              {minutes}:{seconds}
-            </h2>
-
+            <h2 className="timer">{minutes}:{seconds}</h2>
             <p>QR code expires in five minutes.</p>
           </div>
         )}
@@ -148,9 +139,7 @@ function App() {
         </div>
       </main>
 
-      <footer>
-        CampusPass © 2026
-      </footer>
+      <footer>CampusPass © 2026</footer>
     </div>
   );
 }

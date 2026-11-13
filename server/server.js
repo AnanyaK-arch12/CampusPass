@@ -1,4 +1,4 @@
-
+import process from "node:process";
 import express from "express";
 import cors from "cors";
 import QRCode from "qrcode";
@@ -69,11 +69,11 @@ const qrCode = await QRCode.toDataURL(studentUrl);
             expiresAt
         });
 
-    } catch (error) {
-        res.status(500).json({
-            message: "Could not generate QR code."
-        });
-    }
+    } catch {
+    res.status(500).json({
+        message: "Could not generate QR code."
+    });
+}
 });
 
 // Student verifies attendance
