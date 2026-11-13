@@ -12,8 +12,8 @@ app.use(express.json());
 
 const sessions = new Map();
 
-const RADIUS_METRES = 1000;
-const MAX_GPS_ACCURACY = 1000;
+const RADIUS_METRES = 50;
+const MAX_GPS_ACCURACY = 2500;
 const QR_VALIDITY = 5 * 60 * 1000;
 
 // Calculate distance between GPS coordinates
