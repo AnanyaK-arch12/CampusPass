@@ -58,7 +58,10 @@ app.post("/api/attendance/start", async (req, res) => {
             attendance: new Set()
         });
 
-        const studentUrl = `http://localhost:5173/student?token=${token}`;
+        const frontendUrl =
+    process.env.FRONTEND_URL || "http://localhost:5173";
+
+const studentUrl = `${frontendUrl}/student?token=${token}`;
 
 const qrCode = await QRCode.toDataURL(studentUrl);
 
