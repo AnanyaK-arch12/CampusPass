@@ -5,6 +5,8 @@ function Student() {
   const [studentId, setStudentId] = useState("");
   const [status, setStatus] = useState("Ready to mark attendance");
   const [loading, setLoading] = useState(false);
+  const [distance, setDistance] = useState(null);
+  const [accuracy, setAccuracy] = useState(null);
 
   const markAttendance = () => {
     const token = new URLSearchParams(window.location.search).get("token");
@@ -25,11 +27,18 @@ function Student() {
     }
 
     setLoading(true);
+    setDistance(null);
+    setAccuracy(null);
     setStatus("Checking your location...");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
+          const studentLat = position.coords.latitude;
+          const studentLon = position.coords.longitude;
+
+          setAccuracy(Math.round(position.coords.accuracy));
+
           const response = await fetch(
             "https://campuspass-oitp.onrender.com/api/attendance/verify",
             {
@@ -39,26 +48,42 @@ function Student() {
               },
               body: JSON.stringify({
                 token,
-                studentId,
-                studentLat: position.coords.latitude,
-                studentLon: position.coords.longitude,
+                studentId: studentId.trim(),
+                studentLat,
+                studentLon,
               }),
             }
           );
 
           const data = await response.json();
-          setStatus(data.message);
-        } catch {
+
+          setStatus(data.message || "Attendance verification failed.");
+
+          if (data.distance !== undefined) {
+            setDistance(data.distance);
+          }
+        } catch (error) {
           setStatus("Could not connect to the attendance server.");
         } finally {
           setLoading(false);
         }
       },
-      () => {
+      (error) => {
         setLoading(false);
-        setStatus("Please allow location permission to mark attendance.");
+
+        if (error.code === 1) {
+          setStatus("Please allow location permission.");
+        } else if (error.code === 3) {
+          setStatus("Location request timed out. Please try again.");
+        } else {
+          setStatus("Unable to get your location.");
+        }
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
     );
   };
 
@@ -81,6 +106,18 @@ function Student() {
       <div className="status">
         <strong>Status:</strong>
         <p>{status}</p>
+
+        {distance !== null && (
+          <p>
+            <strong>Distance from teacher:</strong> {distance} metres
+          </p>
+        )}
+
+        {accuracy !== null && (
+          <p>
+            <strong>Your GPS accuracy:</strong> ±{accuracy} metres
+          </p>
+        )}
       </div>
     </main>
   );
