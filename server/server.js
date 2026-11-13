@@ -12,7 +12,8 @@ app.use(express.json());
 
 const sessions = new Map();
 
-const RADIUS_METRES = 50;
+const RADIUS_METRES = 1000;
+const MAX_GPS_ACCURACY = 1000;
 const QR_VALIDITY = 5 * 60 * 1000;
 
 // Calculate distance between GPS coordinates
@@ -136,7 +137,20 @@ app.post("/api/attendance/verify", (req, res) => {
             message: "QR code expired. Attendance not marked."
         });
     }
-
+    // Check GPS accuracy before calculating distance
+if (
+    !Number.isFinite(session.teacherAccuracy) ||
+    !Number.isFinite(studentAccuracy) ||
+    session.teacherAccuracy > MAX_GPS_ACCURACY ||
+    studentAccuracy > MAX_GPS_ACCURACY
+) {
+    return res.status(422).json({
+        success: false,
+        message: "GPS signal is too inaccurate. Please try again in a location with a better GPS signal.",
+        teacherAccuracy: session.teacherAccuracy,
+        studentAccuracy
+    });
+}
     const cleanStudentId = studentId.trim();
 
     const distance = calculateDistance(
