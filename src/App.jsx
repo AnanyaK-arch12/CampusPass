@@ -1,122 +1,149 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+
+import { useState, useEffect } from "react";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [qrCode, setQrCode] = useState("");
+  const [expiresAt, setExpiresAt] = useState(null);
+  const [remaining, setRemaining] = useState(300);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("Ready to start attendance");
+
+  // Five-minute countdown
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const updateTimer = () => {
+      const seconds = Math.max(
+        0,
+        Math.ceil((expiresAt - Date.now()) / 1000)
+      );
+
+      setRemaining(seconds);
+
+      if (seconds === 0) {
+        setQrCode("");
+        setExpiresAt(null);
+        setStatus("QR code expired. Generate a new one.");
+      }
+    };
+
+    updateTimer();
+
+    const timer = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(timer);
+  }, [expiresAt]);
+
+  // Get teacher location and generate QR
+  const startAttendance = () => {
+    if (!navigator.geolocation) {
+      setStatus("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Getting teacher location...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const teacherLat = position.coords.latitude;
+          const teacherLon = position.coords.longitude;
+
+          const response = await fetch(
+            "http://localhost:5000/api/attendance/start",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                teacherLat,
+                teacherLon,
+              }),
+            }
+          );
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Could not start attendance.");
+          }
+
+          setQrCode(data.qrCode);
+          setExpiresAt(data.expiresAt);
+          setRemaining(300);
+          setStatus("Attendance session started successfully!");
+        } catch (error) {
+          setStatus(error.message);
+        } finally {
+          setLoading(false);
+        }
+      },
+      (error) => {
+        setLoading(false);
+
+        if (error.code === 1) {
+          setStatus("Please allow location permission.");
+        } else {
+          setStatus("Unable to get your location. Please try again.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const seconds = String(remaining % 60).padStart(2, "0");
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
+    <div className="campus-container">
+      <header className="campus-header">
+        <h1>CampusPass</h1>
+        <p>Smart Campus Attendance System</p>
+      </header>
+
+      <main className="attendance-card">
+        <h2>Teacher Dashboard</h2>
+        <p>Generate a temporary QR code for student attendance.</p>
+
         <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+          onClick={startAttendance}
+          disabled={loading || Boolean(qrCode)}
         >
-          Count is {count}
+          {loading ? "Please wait..." : "Generate Attendance QR"}
         </button>
-      </section>
 
-      <div className="ticks"></div>
+        {qrCode && (
+          <div className="qr-section">
+            <h3>Scan to Mark Attendance</h3>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+            <img src={qrCode} alt="Attendance QR Code" />
+
+            <h2 className="timer">
+              {minutes}:{seconds}
+            </h2>
+
+            <p>QR code expires in five minutes.</p>
+          </div>
+        )}
+
+        <div className="status">
+          <strong>Status:</strong>
+          <p>{status}</p>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </main>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <footer>
+        CampusPass © 2026
+      </footer>
+    </div>
+  );
 }
 
-export default App
+export default App;
