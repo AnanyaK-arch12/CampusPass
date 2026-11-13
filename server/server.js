@@ -12,6 +12,7 @@ app.use(express.json());
 
 const sessions = new Map();
 
+const DEMO_MODE = true;
 const RADIUS_METRES = 50;
 const MAX_GPS_ACCURACY = 2500;
 const QR_VALIDITY = 5 * 60 * 1000;
@@ -137,40 +138,43 @@ app.post("/api/attendance/verify", (req, res) => {
             message: "QR code expired. Attendance not marked."
         });
     }
-    // Check GPS accuracy before calculating distance
-if (
-    !Number.isFinite(session.teacherAccuracy) ||
-    !Number.isFinite(studentAccuracy) ||
-    session.teacherAccuracy > MAX_GPS_ACCURACY ||
-    studentAccuracy > MAX_GPS_ACCURACY
-) {
-    return res.status(422).json({
-        success: false,
-        message: "GPS signal is too inaccurate. Please try again in a location with a better GPS signal.",
-        teacherAccuracy: session.teacherAccuracy,
-        studentAccuracy
-    });
-}
-    const cleanStudentId = studentId.trim();
 
-    const distance = calculateDistance(
-        session.teacherLat,
-        session.teacherLon,
-        studentLat,
-        studentLon
-    );
+const cleanStudentId = studentId.trim();
+
+const distance = calculateDistance(
+    session.teacherLat,
+    session.teacherLon,
+    studentLat,
+    studentLon
+);
+
+// Real GPS verification is disabled only in demo mode
+if (!DEMO_MODE) {
+    if (
+        !Number.isFinite(session.teacherAccuracy) ||
+        !Number.isFinite(studentAccuracy) ||
+        session.teacherAccuracy > MAX_GPS_ACCURACY ||
+        studentAccuracy > MAX_GPS_ACCURACY
+    ) {
+        return res.status(422).json({
+            success: false,
+            message: "GPS signal is too inaccurate.",
+            teacherAccuracy: session.teacherAccuracy,
+            studentAccuracy
+        });
+    }
 
     if (distance > RADIUS_METRES) {
         return res.status(403).json({
             success: false,
-            message: "You are not in the same location as your teacher. Attendance not marked.",
+            message: "You are not in the same location as your teacher.",
             distance: Math.round(distance),
             teacherAccuracy: session.teacherAccuracy,
-            studentAccuracy: Number.isFinite(studentAccuracy)
-                ? studentAccuracy
-                : null
+            studentAccuracy
         });
     }
+}
+
 
     if (session.attendance.has(cleanStudentId)) {
         return res.status(409).json({
@@ -185,24 +189,32 @@ if (
     session.attendance.add(cleanStudentId);
 
     session.records.push({
-        studentId: cleanStudentId,
-        markedAt,
-        distance: Math.round(distance),
-        studentAccuracy: Number.isFinite(studentAccuracy)
-            ? studentAccuracy
-            : null
-    });
+    studentId: cleanStudentId,
+    markedAt,
+    distance: DEMO_MODE ? null : Math.round(distance),
+    studentAccuracy: Number.isFinite(studentAccuracy)
+        ? studentAccuracy
+        : null,
+    locationVerification: DEMO_MODE
+        ? "SIMULATED - DEMO MODE"
+        : "GPS VERIFIED"
+});
 
     res.json({
-        success: true,
-        message: "Attendance marked successfully!",
-        distance: Math.round(distance),
-        markedAt,
-        teacherAccuracy: session.teacherAccuracy,
-        studentAccuracy: Number.isFinite(studentAccuracy)
-            ? studentAccuracy
-            : null
-    });
+    success: true,
+    message: DEMO_MODE
+        ? "Attendance marked successfully! (DEMO MODE - Location not verified)"
+        : "Attendance marked successfully!",
+    distance: DEMO_MODE ? null : Math.round(distance),
+    markedAt,
+    teacherAccuracy: session.teacherAccuracy,
+    studentAccuracy: Number.isFinite(studentAccuracy)
+        ? studentAccuracy
+        : null,
+    locationVerification: DEMO_MODE
+        ? "SIMULATED - DEMO MODE"
+        : "GPS VERIFIED"
+});
 });
 
 // Teacher retrieves attendance for a particular QR session

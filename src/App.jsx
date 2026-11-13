@@ -242,9 +242,16 @@ function App() {
                     </p>
 
                     <p>
-                      <strong>Distance from teacher:</strong>{" "}
-                      {record.distance} metres
-                    </p>
+  <strong>Distance from teacher:</strong>{" "}
+  {record.distance == null
+    ? "Not verified (Demo Mode)"
+    : `${record.distance} metres`}
+</p>
+
+<p>
+  <strong>Location verification:</strong>{" "}
+  {record.locationVerification || "Not available"}
+</p>
 
                     <p>
                       <strong>Student GPS accuracy:</strong>{" "}
@@ -266,3 +273,6 @@ function App() {
 }
 
 export default App;
+<p className="status">
+  DEMO MODE: Attendance is simulated; physical location is not verified.
+</p>
