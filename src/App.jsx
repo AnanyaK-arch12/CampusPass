@@ -14,7 +14,7 @@ function App() {
   if (window.location.pathname === "/student") {
     return <Student />;
   }
-  
+
   // Five-minute countdown
   useEffect(() => {
     if (!expiresAt) return;
@@ -58,7 +58,7 @@ function App() {
           const teacherLon = position.coords.longitude;
 
           const response = await fetch(
-            "http://localhost:5000/api/attendance/start",
+            "https://campuspass-oitp.onrender.com/api/attendance/start",
             {
               method: "POST",
               headers: {

@@ -31,7 +31,7 @@ function Student() {
       async (position) => {
         try {
           const response = await fetch(
-            "http://localhost:5000/api/attendance/verify",
+            "https://campuspass-oitp.onrender.com/api/attendance/verify",
             {
               method: "POST",
               headers: {
