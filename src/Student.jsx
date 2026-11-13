@@ -62,7 +62,7 @@ function Student() {
           if (data.distance !== undefined) {
             setDistance(data.distance);
           }
-        } catch (error) {
+        } catch {
           setStatus("Could not connect to the attendance server.");
         } finally {
           setLoading(false);
