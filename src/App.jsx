@@ -1,14 +1,20 @@
-
+import Student from "./Student";
 import { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
+  
   const [qrCode, setQrCode] = useState("");
   const [expiresAt, setExpiresAt] = useState(null);
   const [remaining, setRemaining] = useState(300);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Ready to start attendance");
 
+  // Add this check immediately after the opening brace
+  if (window.location.pathname === "/student") {
+    return <Student />;
+  }
+  
   // Five-minute countdown
   useEffect(() => {
     if (!expiresAt) return;
@@ -99,6 +105,9 @@ function App() {
   };
 
   const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+  if (new URLSearchParams(window.location.search).get("student") === "1") {
+  return <Student />;
+}
   const seconds = String(remaining % 60).padStart(2, "0");
 
   return (

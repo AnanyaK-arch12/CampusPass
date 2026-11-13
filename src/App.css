@@ -80,3 +80,17 @@ footer {
     margin: 25px 15px;
   }
 }
+.attendance-card input {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  margin: 15px 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.attendance-card input:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}

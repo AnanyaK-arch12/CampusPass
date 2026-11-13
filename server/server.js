@@ -58,9 +58,9 @@ app.post("/api/attendance/start", async (req, res) => {
             attendance: new Set()
         });
 
-        const qrCode = await QRCode.toDataURL(
-            JSON.stringify({ token })
-        );
+        const studentUrl = `http://localhost:5173/student?token=${token}`;
+
+const qrCode = await QRCode.toDataURL(studentUrl);
 
         res.json({
             message: "Attendance session started.",
