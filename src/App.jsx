@@ -59,7 +59,9 @@ function App() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.message || "Could not load attendance.");
+          throw new Error(
+            data.message || "Could not load attendance."
+          );
         }
 
         if (!cancelled) {
@@ -110,6 +112,14 @@ function App() {
 
           setTeacherAccuracy(accuracy);
 
+          if (accuracy > 50) {
+            setStatus(
+              `Teacher GPS accuracy is too low (±${Math.round(accuracy)} m). Please try again outdoors or in a location with better GPS reception.`
+            );
+            setLoading(false);
+            return;
+          }
+
           setStatus("Generating attendance QR code...");
 
           const response = await fetch(
@@ -130,31 +140,46 @@ function App() {
           const data = await response.json();
 
           if (!response.ok) {
-            throw new Error(data.message || "Could not start attendance.");
+            throw new Error(
+              data.message || "Could not start attendance."
+            );
           }
 
           setQrCode(data.qrCode);
           setToken(data.token);
           setManagementKey(data.managementKey);
           setExpiresAt(data.expiresAt);
+
           setRemaining(
-            Math.max(0, Math.ceil((data.expiresAt - Date.now()) / 1000))
+            Math.max(
+              0,
+              Math.ceil((data.expiresAt - Date.now()) / 1000)
+            )
           );
 
           setStatus("Attendance session started successfully!");
         } catch (error) {
-          setStatus(error.message || "Could not connect to the server.");
+          setStatus(
+            error.message || "Could not connect to the server."
+          );
         } finally {
           setLoading(false);
         }
       },
-      () => {
-        setStatus("Unable to get teacher location. Please allow location access.");
+      (error) => {
+        if (error.code === 1) {
+          setStatus("Please allow location access.");
+        } else if (error.code === 3) {
+          setStatus("Location request timed out. Please try again.");
+        } else {
+          setStatus("Unable to get teacher location.");
+        }
+
         setLoading(false);
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 30000,
         maximumAge: 0
       }
     );
@@ -181,6 +206,10 @@ function App() {
       <main className="attendance-card">
         <h2>Teacher Dashboard</h2>
 
+        <p className="status">
+          Real GPS verification enabled. Attendance requires an acceptable GPS accuracy reading and a distance within 50 metres.
+        </p>
+
         <button
           onClick={startAttendance}
           disabled={loading}
@@ -192,7 +221,8 @@ function App() {
 
         {teacherAccuracy !== null && (
           <p>
-            Teacher GPS accuracy: ±{Math.round(teacherAccuracy)} metres
+            Teacher GPS accuracy: ±
+            {Math.round(teacherAccuracy)} metres
           </p>
         )}
 
@@ -207,7 +237,8 @@ function App() {
             />
 
             <p className="timer">
-              QR expires in: {minutes}:{String(seconds).padStart(2, "0")}
+              QR expires in: {minutes}:
+              {String(seconds).padStart(2, "0")}
             </p>
           </section>
         )}
@@ -231,9 +262,12 @@ function App() {
             ) : (
               <div>
                 {attendanceRecords.map((record, index) => (
-                  <div key={`${record.studentId}-${index}`}>
+                  <div
+                    key={`${record.studentId}-${index}`}
+                  >
                     <p>
-                      <strong>Student ID:</strong> {record.studentId}
+                      <strong>Student ID:</strong>{" "}
+                      {record.studentId}
                     </p>
 
                     <p>
@@ -242,16 +276,16 @@ function App() {
                     </p>
 
                     <p>
-  <strong>Distance from teacher:</strong>{" "}
-  {record.distance == null
-    ? "Not verified (Demo Mode)"
-    : `${record.distance} metres`}
-</p>
+                      <strong>Distance from teacher:</strong>{" "}
+                      {record.distance == null
+                        ? "Not available"
+                        : `${record.distance} metres`}
+                    </p>
 
-<p>
-  <strong>Location verification:</strong>{" "}
-  {record.locationVerification || "Not available"}
-</p>
+                    <p>
+                      <strong>Location verification:</strong>{" "}
+                      {record.locationVerification || "Not available"}
+                    </p>
 
                     <p>
                       <strong>Student GPS accuracy:</strong>{" "}
@@ -273,6 +307,3 @@ function App() {
 }
 
 export default App;
-<p className="status">
-  DEMO MODE: Attendance is simulated; physical location is not verified.
-</p>

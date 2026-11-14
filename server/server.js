@@ -12,12 +12,12 @@ app.use(express.json());
 
 const sessions = new Map();
 
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 const RADIUS_METRES = 50;
-const MAX_GPS_ACCURACY = 2500;
+const MAX_GPS_ACCURACY = 50;
 const QR_VALIDITY = 5 * 60 * 1000;
 
-// Calculate distance between GPS coordinates
+// Calculate distance between two GPS coordinates
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
 
@@ -41,16 +41,24 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 // Teacher starts a new attendance session
 app.post("/api/attendance/start", async (req, res) => {
     try {
-        const { teacherLat, teacherLon, teacherAccuracy } = req.body;
+        const {
+            teacherLat,
+            teacherLon,
+            teacherAccuracy
+        } = req.body;
 
+        // Validate teacher GPS coordinates and accuracy
         if (
             !Number.isFinite(teacherLat) ||
             !Number.isFinite(teacherLon) ||
             Math.abs(teacherLat) > 90 ||
-            Math.abs(teacherLon) > 180
+            Math.abs(teacherLon) > 180 ||
+            !Number.isFinite(teacherAccuracy) ||
+            teacherAccuracy < 0 ||
+            teacherAccuracy > MAX_GPS_ACCURACY
         ) {
             return res.status(400).json({
-                message: "Valid teacher location is required."
+                message: "Valid teacher location and GPS accuracy are required."
             });
         }
 
@@ -62,38 +70,35 @@ app.post("/api/attendance/start", async (req, res) => {
             managementKey,
             teacherLat,
             teacherLon,
-            teacherAccuracy: Number.isFinite(teacherAccuracy)
-                ? teacherAccuracy
-                : null,
+            teacherAccuracy,
             expiresAt,
             attendance: new Set(),
             records: []
         });
 
         const frontendUrl = (
-            process.env.FRONTEND_URL || "http://localhost:5173"
-        ).replace(/\/$/, "");
+            process.env.FRONTEND_URL ||
+            "http://localhost:5173"
+        ).replace(/\/+$/, "");
 
         const studentUrl =
             `${frontendUrl}/student?token=${token}`;
 
         const qrCode = await QRCode.toDataURL(studentUrl);
 
-        res.json({
+        return res.json({
             message: "Attendance session started.",
             token,
             managementKey,
             qrCode,
             expiresAt,
-            teacherAccuracy: Number.isFinite(teacherAccuracy)
-                ? teacherAccuracy
-                : null
+            teacherAccuracy
         });
 
     } catch (error) {
         console.error("Session creation error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Could not generate QR code."
         });
     }
@@ -109,6 +114,7 @@ app.post("/api/attendance/verify", (req, res) => {
         studentAccuracy
     } = req.body;
 
+    // Validate student information and GPS coordinates
     if (
         !token ||
         typeof studentId !== "string" ||
@@ -119,6 +125,7 @@ app.post("/api/attendance/verify", (req, res) => {
         Math.abs(studentLon) > 180
     ) {
         return res.status(400).json({
+            success: false,
             message: "Valid token, student ID and location are required."
         });
     }
@@ -127,60 +134,69 @@ app.post("/api/attendance/verify", (req, res) => {
 
     if (!session) {
         return res.status(404).json({
+            success: false,
             message: "Invalid attendance QR code."
         });
     }
 
+    // Check QR expiry
     if (Date.now() > session.expiresAt) {
         sessions.delete(token);
 
         return res.status(410).json({
+            success: false,
             message: "QR code expired. Attendance not marked."
         });
     }
 
-const cleanStudentId = studentId.trim();
+    const cleanStudentId = studentId.trim();
 
-const distance = calculateDistance(
-    session.teacherLat,
-    session.teacherLon,
-    studentLat,
-    studentLon
-);
+    // Calculate distance between teacher and student
+    const distance = calculateDistance(
+        session.teacherLat,
+        session.teacherLon,
+        studentLat,
+        studentLon
+    );
 
-// Real GPS verification is disabled only in demo mode
-if (!DEMO_MODE) {
-    if (
-        !Number.isFinite(session.teacherAccuracy) ||
-        !Number.isFinite(studentAccuracy) ||
-        session.teacherAccuracy > MAX_GPS_ACCURACY ||
-        studentAccuracy > MAX_GPS_ACCURACY
-    ) {
-        return res.status(422).json({
-            success: false,
-            message: "GPS signal is too inaccurate.",
-            teacherAccuracy: session.teacherAccuracy,
-            studentAccuracy
-        });
+    // Real GPS verification
+    if (!DEMO_MODE) {
+
+        // Validate teacher and student GPS accuracy
+        if (
+            !Number.isFinite(session.teacherAccuracy) ||
+            !Number.isFinite(studentAccuracy) ||
+            session.teacherAccuracy < 0 ||
+            studentAccuracy < 0 ||
+            session.teacherAccuracy > MAX_GPS_ACCURACY ||
+            studentAccuracy > MAX_GPS_ACCURACY
+        ) {
+            return res.status(422).json({
+                success: false,
+                message: "GPS signal is too inaccurate.",
+                teacherAccuracy: session.teacherAccuracy,
+                studentAccuracy
+            });
+        }
+
+        // Check whether student is within 50 metres
+        if (distance > RADIUS_METRES) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not in the same location as your teacher.",
+                distance: Math.round(distance),
+                teacherAccuracy: session.teacherAccuracy,
+                studentAccuracy
+            });
+        }
     }
 
-    if (distance > RADIUS_METRES) {
-        return res.status(403).json({
-            success: false,
-            message: "You are not in the same location as your teacher.",
-            distance: Math.round(distance),
-            teacherAccuracy: session.teacherAccuracy,
-            studentAccuracy
-        });
-    }
-}
-
-
+    // Prevent duplicate attendance
     if (session.attendance.has(cleanStudentId)) {
         return res.status(409).json({
             success: false,
             message: "Attendance already marked.",
-            distance: Math.round(distance)
+            distance: DEMO_MODE ? null : Math.round(distance)
         });
     }
 
@@ -188,33 +204,31 @@ if (!DEMO_MODE) {
 
     session.attendance.add(cleanStudentId);
 
-    session.records.push({
-    studentId: cleanStudentId,
-    markedAt,
-    distance: DEMO_MODE ? null : Math.round(distance),
-    studentAccuracy: Number.isFinite(studentAccuracy)
-        ? studentAccuracy
-        : null,
-    locationVerification: DEMO_MODE
-        ? "SIMULATED - DEMO MODE"
-        : "GPS VERIFIED"
-});
+    const record = {
+        studentId: cleanStudentId,
+        markedAt,
+        distance: DEMO_MODE ? null : Math.round(distance),
+        studentAccuracy: Number.isFinite(studentAccuracy)
+            ? studentAccuracy
+            : null,
+        locationVerification: DEMO_MODE
+            ? "SIMULATED - DEMO MODE"
+            : "GPS VERIFIED"
+    };
 
-    res.json({
-    success: true,
-    message: DEMO_MODE
-        ? "Attendance marked successfully! (DEMO MODE - Location not verified)"
-        : "Attendance marked successfully!",
-    distance: DEMO_MODE ? null : Math.round(distance),
-    markedAt,
-    teacherAccuracy: session.teacherAccuracy,
-    studentAccuracy: Number.isFinite(studentAccuracy)
-        ? studentAccuracy
-        : null,
-    locationVerification: DEMO_MODE
-        ? "SIMULATED - DEMO MODE"
-        : "GPS VERIFIED"
-});
+    session.records.push(record);
+
+    return res.json({
+        success: true,
+        message: DEMO_MODE
+            ? "Attendance marked successfully! (DEMO MODE - Location not verified)"
+            : "Attendance marked successfully!",
+        distance: record.distance,
+        markedAt,
+        teacherAccuracy: session.teacherAccuracy,
+        studentAccuracy: record.studentAccuracy,
+        locationVerification: record.locationVerification
+    });
 });
 
 // Teacher retrieves attendance for a particular QR session
@@ -230,6 +244,7 @@ app.get("/api/attendance/list/:token", (req, res) => {
         });
     }
 
+    // Verify teacher access
     if (
         !managementKey ||
         managementKey !== session.managementKey
@@ -239,7 +254,7 @@ app.get("/api/attendance/list/:token", (req, res) => {
         });
     }
 
-    res.json({
+    return res.json({
         success: true,
         total: session.records.length,
         records: session.records,
@@ -253,6 +268,7 @@ app.get("/", (req, res) => {
     res.send("CampusPass Backend is Running!");
 });
 
+// Start server
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
